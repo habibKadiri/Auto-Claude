@@ -78,7 +78,18 @@ from ui import (
 # Configuration
 MAX_RETRIES = 3
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-SPECS_DIR = Path(__file__).parent / "specs"
+
+# Default specs directory (production mode)
+DEFAULT_SPECS_DIR = Path(__file__).parent / "specs"
+# Dev specs directory (--dev mode) - gitignored, for developing auto-build itself
+DEV_SPECS_DIR = Path(__file__).parent.parent / "dev" / "auto-build" / "specs"
+
+
+def get_specs_dir(dev_mode: bool = False) -> Path:
+    """Get the specs directory based on mode."""
+    if dev_mode:
+        return DEV_SPECS_DIR
+    return DEFAULT_SPECS_DIR
 
 
 class Complexity(Enum):
@@ -344,19 +355,24 @@ class SpecOrchestrator:
         model: str = "claude-opus-4-5-20251101",
         complexity_override: Optional[str] = None,  # Force a specific complexity
         use_ai_assessment: bool = True,  # Use AI for complexity assessment (vs heuristics)
+        dev_mode: bool = False,  # Dev mode: specs in gitignored folder, code changes to auto-build/
     ):
         self.project_dir = Path(project_dir)
         self.task_description = task_description
         self.model = model
         self.complexity_override = complexity_override
         self.use_ai_assessment = use_ai_assessment
+        self.dev_mode = dev_mode
+
+        # Get the appropriate specs directory
+        self.specs_dir = get_specs_dir(dev_mode)
 
         # Complexity assessment (populated during run)
         self.assessment: Optional[ComplexityAssessment] = None
 
         # Create spec directory
         if spec_name:
-            self.spec_dir = SPECS_DIR / spec_name
+            self.spec_dir = self.specs_dir / spec_name
         else:
             self.spec_dir = self._create_spec_dir()
 
@@ -365,7 +381,7 @@ class SpecOrchestrator:
 
     def _create_spec_dir(self) -> Path:
         """Create a new spec directory with incremented number."""
-        existing = list(SPECS_DIR.glob("[0-9][0-9][0-9]-*"))
+        existing = list(self.specs_dir.glob("[0-9][0-9][0-9]-*"))
         next_num = len(existing) + 1
 
         # Generate name from task description
@@ -377,7 +393,7 @@ class SpecOrchestrator:
         else:
             name = "new-spec"
 
-        return SPECS_DIR / f"{next_num:03d}-{name}"
+        return self.specs_dir / f"{next_num:03d}-{name}"
 
     def _run_script(self, script: str, args: list[str]) -> tuple[bool, str]:
         """Run a Python script and return (success, output)."""
@@ -539,6 +555,7 @@ class SpecOrchestrator:
                     "phases_to_run": phases,
                     "needs_research": self.assessment.needs_research,
                     "needs_self_critique": self.assessment.needs_self_critique,
+                    "dev_mode": self.dev_mode,  # Track if this spec was created in dev mode
                     "created_at": datetime.now().isoformat(),
                 }, f, indent=2)
 
@@ -1385,6 +1402,11 @@ Examples:
         action="store_true",
         help="Use heuristic complexity assessment instead of AI (faster but less accurate)",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Dev mode: specs saved to dev/auto-build/specs/ (gitignored), code changes target auto-build/",
+    )
 
     args = parser.parse_args()
 
@@ -1416,6 +1438,11 @@ Examples:
                 project_dir = parent
                 break
 
+    # Show dev mode warning
+    if args.dev:
+        print(f"\n{icon(Icons.GEAR)} DEV MODE: Specs will be saved to dev/auto-build/specs/ (gitignored)")
+        print(f"  Code changes will target auto-build/ (versioned)\n")
+
     orchestrator = SpecOrchestrator(
         project_dir=project_dir,
         task_description=task_description,
@@ -1423,6 +1450,7 @@ Examples:
         model=args.model,
         complexity_override=args.complexity,
         use_ai_assessment=not args.no_ai_assessment,
+        dev_mode=args.dev,
     )
 
     try:

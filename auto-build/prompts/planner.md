@@ -547,6 +547,24 @@ chmod +x init.sh
 
 ## PHASE 6: CREATE GIT BRANCH
 
+**FIRST: Check if running in dev mode:**
+```bash
+# Check complexity_assessment.json for dev_mode flag
+cat complexity_assessment.json | grep -o '"dev_mode": true' && echo "DEV MODE ACTIVE"
+```
+
+**If dev_mode is TRUE:**
+- Spec files are in a gitignored location (dev/auto-build/specs/)
+- Do NOT commit spec files - they're working documents
+- Still create the git branch for tracking code changes to auto-build/
+
+```bash
+# Create feature branch for tracking code changes
+git checkout -b auto-build/[feature-name]
+# Do NOT commit spec files in dev mode - they're in gitignored folder
+```
+
+**If dev_mode is FALSE (normal mode):**
 ```bash
 # Create feature branch
 git checkout -b auto-build/[feature-name]
@@ -603,11 +621,16 @@ To continue building this spec, run:
 Example:
   source auto-build/.venv/bin/activate && python auto-build/run.py --spec 001 --parallel 2
 
+(If in dev mode, add --dev flag to the command)
+
 === END SESSION 1 ===
 ```
 
-Commit:
+**Commit (only if NOT in dev mode):**
+Check complexity_assessment.json for dev_mode flag first. If dev_mode is true, skip this commit.
+
 ```bash
+# Only if dev_mode is false:
 git add build-progress.txt
 git commit -m "auto-build: Add progress tracking"
 ```

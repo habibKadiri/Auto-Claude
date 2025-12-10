@@ -92,22 +92,32 @@ from qa_loop import (
 
 # Configuration
 DEFAULT_MODEL = "claude-opus-4-5-20251101"
-SPECS_DIR = "auto-build/specs"
+
+# Default specs directory (production mode)
+DEFAULT_SPECS_DIR = "auto-build/specs"
+# Dev specs directory (--dev mode) - gitignored, for developing auto-build itself
+DEV_SPECS_DIR = "dev/auto-build/specs"
 
 
-def get_specs_dir(project_dir: Path) -> Path:
-    """Get the specs directory path."""
-    return project_dir / SPECS_DIR
+def get_specs_dir(project_dir: Path, dev_mode: bool = False) -> Path:
+    """Get the specs directory path based on mode."""
+    if dev_mode:
+        return project_dir / DEV_SPECS_DIR
+    return project_dir / DEFAULT_SPECS_DIR
 
 
-def list_specs(project_dir: Path) -> list[dict]:
+def list_specs(project_dir: Path, dev_mode: bool = False) -> list[dict]:
     """
     List all specs in the project.
+
+    Args:
+        project_dir: Project root directory
+        dev_mode: If True, use dev/auto-build/specs/
 
     Returns:
         List of spec info dicts with keys: number, name, path, status, progress
     """
-    specs_dir = get_specs_dir(project_dir)
+    specs_dir = get_specs_dir(project_dir, dev_mode)
     specs = []
 
     if not specs_dir.exists():
@@ -168,18 +178,19 @@ def list_specs(project_dir: Path) -> list[dict]:
     return specs
 
 
-def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
+def find_spec(project_dir: Path, spec_identifier: str, dev_mode: bool = False) -> Path | None:
     """
     Find a spec by number or full name.
 
     Args:
         project_dir: Project root directory
         spec_identifier: Either "001" or "001-feature-name"
+        dev_mode: If True, use dev/auto-build/specs/
 
     Returns:
         Path to spec folder, or None if not found
     """
-    specs_dir = get_specs_dir(project_dir)
+    specs_dir = get_specs_dir(project_dir, dev_mode)
 
     if not specs_dir.exists():
         return None
@@ -198,9 +209,9 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
     return None
 
 
-def print_specs_list(project_dir: Path) -> None:
+def print_specs_list(project_dir: Path, dev_mode: bool = False) -> None:
     """Print a formatted list of all specs."""
-    specs = list_specs(project_dir)
+    specs = list_specs(project_dir, dev_mode)
 
     if not specs:
         print("\nNo specs found.")
@@ -368,6 +379,13 @@ Environment Variables:
         help="Skip automatic QA validation after build completes",
     )
 
+    # Dev mode
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Dev mode: use specs from dev/auto-build/specs/ (gitignored), code changes target auto-build/",
+    )
+
     return parser.parse_args()
 
 
@@ -436,10 +454,15 @@ def main() -> None:
     else:
         project_dir = Path.cwd()
 
+    # Show dev mode info
+    if args.dev:
+        print(f"\n{icon(Icons.GEAR)} DEV MODE: Using specs from dev/auto-build/specs/")
+        print(f"  Code changes will target auto-build/\n")
+
     # Handle --list
     if args.list:
         print_banner()
-        print_specs_list(project_dir)
+        print_specs_list(project_dir, args.dev)
         return
 
     # Require --spec if not listing
@@ -454,12 +477,12 @@ def main() -> None:
         sys.exit(1)
 
     # Find the spec
-    spec_dir = find_spec(project_dir, args.spec)
+    spec_dir = find_spec(project_dir, args.spec, args.dev)
     if not spec_dir:
         print_banner()
         print(f"\nError: Spec '{args.spec}' not found")
         print("\nAvailable specs:")
-        print_specs_list(project_dir)
+        print_specs_list(project_dir, args.dev)
         sys.exit(1)
 
     # Handle build management commands
