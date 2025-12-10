@@ -190,6 +190,48 @@ Understand:
 cat [service-path]/SERVICE_CONTEXT.md 2>/dev/null || echo "No service context"
 ```
 
+### 5.4: Look Up External Library Documentation (Use Context7)
+
+**If your chunk involves external libraries or APIs**, use Context7 to get accurate documentation BEFORE implementing.
+
+#### When to Use Context7
+
+Use Context7 when:
+- Implementing API integrations (Stripe, Auth0, AWS, etc.)
+- Using new libraries not yet in the codebase
+- Unsure about correct function signatures or patterns
+- The spec references libraries you need to use correctly
+
+#### How to Use Context7
+
+**Step 1: Find the library in Context7**
+```
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "[library name from chunk]" }
+```
+
+**Step 2: Get relevant documentation**
+```
+Tool: mcp__context7__get-library-docs
+Input: {
+  "context7CompatibleLibraryID": "[library-id]",
+  "topic": "[specific feature you're implementing]",
+  "mode": "code"  // Use "code" for API examples, "info" for concepts
+}
+```
+
+**Example workflow:**
+If chunk says "Add Stripe payment integration":
+1. `resolve-library-id` with "stripe"
+2. `get-library-docs` with topic "payments" or "checkout"
+3. Use the exact patterns from documentation
+
+**This prevents:**
+- Using deprecated APIs
+- Wrong function signatures
+- Missing required configuration
+- Security anti-patterns
+
 ---
 
 ## STEP 5.5: GENERATE & REVIEW PRE-IMPLEMENTATION CHECKLIST

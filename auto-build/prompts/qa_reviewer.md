@@ -205,6 +205,61 @@ DATABASE VERIFICATION:
 
 ## PHASE 6: CODE REVIEW
 
+### 6.0: Third-Party API/Library Validation (Use Context7)
+
+**CRITICAL**: If the implementation uses third-party libraries or APIs, validate the usage against official documentation.
+
+#### When to Use Context7 for Validation
+
+Use Context7 when the implementation:
+- Calls external APIs (Stripe, Auth0, etc.)
+- Uses third-party libraries (React Query, Prisma, etc.)
+- Integrates with SDKs (AWS SDK, Firebase, etc.)
+
+#### How to Validate with Context7
+
+**Step 1: Identify libraries used in the implementation**
+```bash
+# Check imports in modified files
+grep -rh "^import\|^from\|require(" [modified-files] | sort -u
+```
+
+**Step 2: Look up each library in Context7**
+```
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "[library name]" }
+```
+
+**Step 3: Verify API usage matches documentation**
+```
+Tool: mcp__context7__get-library-docs
+Input: {
+  "context7CompatibleLibraryID": "[library-id]",
+  "topic": "[relevant topic - e.g., the function being used]",
+  "mode": "code"
+}
+```
+
+**Step 4: Check for:**
+- ✓ Correct function signatures (parameters, return types)
+- ✓ Proper initialization/setup patterns
+- ✓ Required configuration or environment variables
+- ✓ Error handling patterns recommended in docs
+- ✓ Deprecated methods being avoided
+
+#### Document Findings
+
+```
+THIRD-PARTY API VALIDATION:
+- [Library Name]: PASS/FAIL
+  - Function signatures: ✓/✗
+  - Initialization: ✓/✗
+  - Error handling: ✓/✗
+  - Issues found: [list or "None"]
+```
+
+If issues are found, add them to the QA report as they indicate the implementation doesn't follow the library's documented patterns.
+
 ### 6.1: Security Review
 
 Check for common vulnerabilities:
@@ -294,6 +349,7 @@ Create a comprehensive QA report:
 | E2E Tests | ✓/✗ | X/Y passing |
 | Browser Verification | ✓/✗ | [summary] |
 | Database Verification | ✓/✗ | [summary] |
+| Third-Party API Validation | ✓/✗ | [Context7 verification summary] |
 | Security Review | ✓/✗ | [summary] |
 | Pattern Compliance | ✓/✗ | [summary] |
 | Regression Check | ✓/✗ | [summary] |

@@ -48,6 +48,12 @@ LINEAR_TOOLS = [
     "mcp__linear-server__get_user",
 ]
 
+# Context7 MCP tools for documentation lookup (always enabled)
+CONTEXT7_TOOLS = [
+    "mcp__context7__resolve-library-id",
+    "mcp__context7__get-library-docs",
+]
+
 # Built-in tools
 BUILTIN_TOOLS = [
     "Read",
@@ -89,7 +95,7 @@ def create_client(project_dir: Path, spec_dir: Path, model: str) -> ClaudeSDKCli
     linear_api_key = os.environ.get("LINEAR_API_KEY", "")
 
     # Build the list of allowed tools
-    allowed_tools_list = [*BUILTIN_TOOLS, *PUPPETEER_TOOLS]
+    allowed_tools_list = [*BUILTIN_TOOLS, *PUPPETEER_TOOLS, *CONTEXT7_TOOLS]
     if linear_enabled:
         allowed_tools_list.extend(LINEAR_TOOLS)
 
@@ -112,6 +118,8 @@ def create_client(project_dir: Path, spec_dir: Path, model: str) -> ClaudeSDKCli
                 "Bash(*)",
                 # Allow Puppeteer MCP tools for browser automation
                 *PUPPETEER_TOOLS,
+                # Allow Context7 MCP tools for documentation lookup
+                *CONTEXT7_TOOLS,
                 # Allow Linear MCP tools for project management (if enabled)
                 *(LINEAR_TOOLS if linear_enabled else []),
             ],
@@ -128,7 +136,7 @@ def create_client(project_dir: Path, spec_dir: Path, model: str) -> ClaudeSDKCli
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
     print("   - Bash commands restricted to allowlist")
 
-    mcp_servers_list = ["puppeteer (browser automation)"]
+    mcp_servers_list = ["puppeteer (browser automation)", "context7 (documentation)"]
     if linear_enabled:
         mcp_servers_list.append("linear (project management)")
     print(f"   - MCP servers: {', '.join(mcp_servers_list)}")
@@ -136,7 +144,8 @@ def create_client(project_dir: Path, spec_dir: Path, model: str) -> ClaudeSDKCli
 
     # Configure MCP servers
     mcp_servers = {
-        "puppeteer": {"command": "npx", "args": ["puppeteer-mcp-server"]}
+        "puppeteer": {"command": "npx", "args": ["puppeteer-mcp-server"]},
+        "context7": {"command": "npx", "args": ["-y", "@upstash/context7-mcp"]},
     }
 
     # Add Linear MCP server if enabled

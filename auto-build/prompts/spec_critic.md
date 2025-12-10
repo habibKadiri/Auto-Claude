@@ -43,12 +43,36 @@ Understand:
 
 ### 1.1: Technical Accuracy
 
-Compare spec.md against research.json:
+Compare spec.md against research.json AND validate with Context7:
 
 - **Package names**: Does spec use correct package names from research?
 - **Import statements**: Do imports match researched API patterns?
 - **API calls**: Do function signatures match documentation?
 - **Configuration**: Are env vars and config options correct?
+
+**USE CONTEXT7 TO VALIDATE TECHNICAL CLAIMS:**
+
+If the spec mentions specific libraries or APIs, verify them against Context7:
+
+```
+# Step 1: Resolve library ID
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "[library from spec]" }
+
+# Step 2: Verify API patterns mentioned in spec
+Tool: mcp__context7__get-library-docs
+Input: {
+  "context7CompatibleLibraryID": "[library-id]",
+  "topic": "[specific API or feature mentioned in spec]",
+  "mode": "code"
+}
+```
+
+**Check for common spec errors:**
+- Wrong package name (e.g., "react-query" vs "@tanstack/react-query")
+- Outdated API patterns (e.g., using deprecated functions)
+- Incorrect function signatures (e.g., wrong parameter order)
+- Missing required configuration (e.g., missing env vars)
 
 Flag any mismatches.
 
@@ -279,7 +303,11 @@ When analyzing, think through:
 >
 > First, let me check all package names. The research says the package is [X], but the spec says [Y]. This is a mismatch that needs fixing.
 >
-> Next, looking at the API patterns. The research shows initialization requires [steps], but the spec shows [different steps]. Another issue.
+> Let me also verify with Context7 - I'll look up the actual package name and API patterns to confirm...
+> [Use mcp__context7__resolve-library-id to find the library]
+> [Use mcp__context7__get-library-docs to check API patterns]
+>
+> Next, looking at the API patterns. The research shows initialization requires [steps], but the spec shows [different steps]. Let me cross-reference with Context7 documentation... Another issue confirmed.
 >
 > For completeness, the requirements mention [X, Y, Z]. The spec covers X and Y but I don't see Z addressed anywhere. This is a gap.
 >

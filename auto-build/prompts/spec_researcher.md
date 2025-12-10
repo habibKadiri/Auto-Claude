@@ -35,14 +35,65 @@ Identify from the requirements:
 
 For EACH external dependency identified, research using available tools:
 
-### 1.1: Use Context7 MCP (if available)
+### 1.1: Use Context7 MCP (PRIMARY RESEARCH TOOL)
 
-If you have access to Context7 MCP, use it to look up:
-- Official documentation
-- API patterns
-- Configuration requirements
+**Context7 should be your FIRST choice for researching libraries and integrations.**
 
-### 1.2: Use Web Search (if needed)
+Context7 provides up-to-date documentation for thousands of libraries. Use it systematically:
+
+#### Step 1: Resolve the Library ID
+
+First, find the correct Context7 library ID:
+
+```
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "[library name from requirements]" }
+```
+
+Example for researching "NextJS":
+```
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "nextjs" }
+```
+
+This returns the Context7-compatible ID (e.g., "/vercel/next.js").
+
+#### Step 2: Get Library Documentation
+
+Once you have the ID, fetch documentation for specific topics:
+
+```
+Tool: mcp__context7__get-library-docs
+Input: {
+  "context7CompatibleLibraryID": "/vercel/next.js",
+  "topic": "routing",  // Focus on relevant topic
+  "mode": "code"       // "code" for API examples, "info" for conceptual guides
+}
+```
+
+**Topics to research for each integration:**
+- "getting started" or "installation" - For setup patterns
+- "api" or "reference" - For function signatures
+- "configuration" or "config" - For environment variables and options
+- "examples" - For common usage patterns
+- Specific feature topics relevant to your task
+
+#### Step 3: Document Findings
+
+For each integration, extract from Context7:
+1. **Correct package name** - The actual npm/pip package name
+2. **Import statements** - How to import in code
+3. **Initialization code** - Setup patterns
+4. **Key API functions** - Function signatures you'll need
+5. **Configuration options** - Environment variables, config files
+6. **Common gotchas** - Issues mentioned in docs
+
+### 1.2: Use Web Search (for supplementary research)
+
+Use web search AFTER Context7 to:
+- Verify package exists on npm/PyPI
+- Find very recent updates or changes
+- Research less common libraries not in Context7
 
 Search for:
 - `"[library] official documentation"`
@@ -191,15 +242,45 @@ research.json created successfully.
 
 ## RESEARCH TOOLS PRIORITY
 
-1. **Context7 MCP** (if available) - Best for official docs
-2. **Web Search** - For package verification, recent info
+1. **Context7 MCP** (PRIMARY) - Best for official docs, API patterns, code examples
+   - Use `resolve-library-id` first to get the library ID
+   - Then `get-library-docs` with relevant topics
+   - Covers most popular libraries (React, Next.js, FastAPI, etc.)
+
+2. **Web Search** - For package verification, recent info, obscure libraries
+   - Use when Context7 doesn't have the library
+   - Good for checking npm/PyPI for package existence
+
 3. **Web Fetch** - For reading specific documentation pages
+   - Use for custom or internal documentation URLs
+
+**ALWAYS try Context7 first** - it provides structured, validated documentation that's more reliable than web search results.
 
 ---
 
 ## EXAMPLE RESEARCH OUTPUT
 
 For a task involving "Graphiti memory integration":
+
+**Step 1: Context7 Lookup**
+```
+Tool: mcp__context7__resolve-library-id
+Input: { "libraryName": "graphiti" }
+→ Returns library ID or "not found"
+```
+
+If found in Context7:
+```
+Tool: mcp__context7__get-library-docs
+Input: {
+  "context7CompatibleLibraryID": "/zep/graphiti",
+  "topic": "getting started",
+  "mode": "code"
+}
+→ Returns installation, imports, initialization code
+```
+
+**Step 2: Compile Findings to research.json**
 
 ```json
 {
@@ -223,7 +304,7 @@ For a task involving "Graphiti memory integration":
           "add_episode(name, episode_body, source, group_id)",
           "search(query, limit, group_ids)"
         ],
-        "verified_against": "https://github.com/getzep/graphiti"
+        "verified_against": "Context7 MCP + GitHub README"
       },
       "configuration": {
         "env_vars": ["OPENAI_API_KEY"],
@@ -239,6 +320,7 @@ For a task involving "Graphiti memory integration":
         "Must call build_indices_and_constraints() before use"
       ],
       "research_sources": [
+        "Context7 MCP: /zep/graphiti",
         "https://github.com/getzep/graphiti",
         "https://pypi.org/project/graphiti-core/"
       ]
@@ -248,6 +330,7 @@ For a task involving "Graphiti memory integration":
   "recommendations": [
     "Consider FalkorDB over Neo4j for simpler local development"
   ],
+  "context7_libraries_used": ["/zep/graphiti"],
   "created_at": "2024-12-10T12:00:00Z"
 }
 ```

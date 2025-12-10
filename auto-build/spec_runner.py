@@ -315,7 +315,7 @@ class SpecOrchestrator:
         project_dir: Path,
         task_description: Optional[str] = None,
         spec_name: Optional[str] = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-opus-4-5-20251101",
         complexity_override: Optional[str] = None,  # Force a specific complexity
     ):
         self.project_dir = Path(project_dir)
@@ -525,18 +525,69 @@ class SpecOrchestrator:
 
         return PhaseResult("discovery", False, [], errors, retries)
 
+    def _interactive_requirements_gathering(self) -> dict:
+        """Gather requirements interactively from the user via CLI prompts."""
+        print()
+        print(f"  {muted('Answer the following questions to define your task:')}")
+        print()
+
+        # Task description
+        print(f"  {bold('1. What do you want to build or fix?')}")
+        print(f"     {muted('(Describe the feature, bug fix, or change)')}")
+        task = input("     > ").strip()
+        if not task:
+            task = "No task description provided"
+        print()
+
+        # Workflow type
+        print(f"  {bold('2. What type of work is this?')}")
+        print(f"     {muted('[1] feature  - New functionality')}")
+        print(f"     {muted('[2] bugfix   - Fix existing issue')}")
+        print(f"     {muted('[3] refactor - Improve code structure')}")
+        print(f"     {muted('[4] docs     - Documentation changes')}")
+        print(f"     {muted('[5] test     - Add or improve tests')}")
+        workflow_choice = input("     > ").strip()
+        workflow_map = {
+            "1": "feature", "feature": "feature",
+            "2": "bugfix", "bugfix": "bugfix",
+            "3": "refactor", "refactor": "refactor",
+            "4": "docs", "docs": "docs",
+            "5": "test", "test": "test",
+        }
+        workflow_type = workflow_map.get(workflow_choice.lower(), "feature")
+        print()
+
+        # Additional context (optional)
+        print(f"  {bold('3. Any additional context or constraints?')}")
+        print(f"     {muted('(Press Enter to skip)')}")
+        additional_context = input("     > ").strip()
+        print()
+
+        return {
+            "task_description": task,
+            "workflow_type": workflow_type,
+            "services_involved": [],  # AI will discover this during planning and context fetching
+            "additional_context": additional_context if additional_context else None,
+            "created_at": datetime.now().isoformat(),
+        }
+
     async def phase_requirements(self, interactive: bool = True) -> PhaseResult:
         """Phase 2: Gather requirements."""
         print_section("PHASE 2: REQUIREMENTS GATHERING", Icons.FILE)
 
         requirements_file = self.spec_dir / "requirements.json"
 
-        # If we have a task description, create requirements directly
+        # Check if requirements already exist
+        if requirements_file.exists():
+            print_status("requirements.json already exists", "success")
+            return PhaseResult("requirements", True, [str(requirements_file)], [], 0)
+
+        # If we have a task description and not interactive, create requirements directly
         if self.task_description and not interactive:
             requirements = {
                 "task_description": self.task_description,
                 "workflow_type": "feature",  # Default, agent will refine
-                "services_involved": [],  # Agent will determine
+                "services_involved": [],  # AI will discover during planning and context fetching
                 "created_at": datetime.now().isoformat(),
             }
             with open(requirements_file, "w") as f:
@@ -544,25 +595,44 @@ class SpecOrchestrator:
             print_status("Created requirements.json from task description", "success")
             return PhaseResult("requirements", True, [str(requirements_file)], [], 0)
 
-        # Interactive mode - run agent
-        errors = []
-        for attempt in range(MAX_RETRIES):
-            print_status(f"Running requirements gatherer (attempt {attempt + 1})...", "progress")
+        # Interactive mode - gather requirements via CLI prompts
+        if interactive:
+            try:
+                requirements = self._interactive_requirements_gathering()
 
-            context = f"**Task**: {self.task_description or 'Ask user what they want to build'}\n"
-            success, output = await self._run_agent(
-                "spec_gatherer.md",
-                additional_context=context,
-                interactive=True,
-            )
+                # Update task description for subsequent phases
+                self.task_description = requirements["task_description"]
 
-            if success and requirements_file.exists():
+                # Re-run complexity assessment with the actual task
+                print()
+                print_status("Re-assessing complexity with actual task...", "progress")
+                analyzer = ComplexityAnalyzer()
+                self.assessment = analyzer.analyze(self.task_description, requirements)
+                print_status(f"Updated complexity: {highlight(self.assessment.complexity.value.upper())}", "success")
+                print_key_value("Confidence", f"{self.assessment.confidence:.0%}")
+                print_key_value("Reasoning", self.assessment.reasoning)
+
+                with open(requirements_file, "w") as f:
+                    json.dump(requirements, f, indent=2)
+                print()
                 print_status("Created requirements.json", "success")
-                return PhaseResult("requirements", True, [str(requirements_file)], [], attempt)
+                return PhaseResult("requirements", True, [str(requirements_file)], [], 0)
+            except (KeyboardInterrupt, EOFError):
+                print()
+                print_status("Requirements gathering cancelled", "warning")
+                return PhaseResult("requirements", False, [], ["User cancelled"], 0)
 
-            errors.append(f"Attempt {attempt + 1}: Agent did not create requirements.json")
-
-        return PhaseResult("requirements", False, [], errors, MAX_RETRIES)
+        # Fallback: create minimal requirements
+        requirements = {
+            "task_description": self.task_description or "Unknown task",
+            "workflow_type": "feature",
+            "services_involved": [],  # AI will discover during planning and context fetching
+            "created_at": datetime.now().isoformat(),
+        }
+        with open(requirements_file, "w") as f:
+            json.dump(requirements, f, indent=2)
+        print_status("Created minimal requirements.json", "success")
+        return PhaseResult("requirements", True, [str(requirements_file)], [], 0)
 
     async def phase_quick_spec(self) -> PhaseResult:
         """Quick spec for simple tasks - combines requirements, context, and spec in one step."""
@@ -1029,13 +1099,15 @@ Output critique_report.json with:
             "quick_spec": lambda: self.phase_quick_spec(),
         }
 
-        # Get phases to run based on complexity
+        # Get initial phases to run based on complexity
         phases_to_run = self.assessment.phases_to_run()
+        initial_complexity = self.assessment.complexity
 
         print()
         print(f"  Running {highlight(self.assessment.complexity.value.upper())} workflow ({highlight(str(len(phases_to_run)))} phases)")
         print()
 
+        phases_executed = []
         for phase_name in phases_to_run:
             if phase_name not in all_phases:
                 print_status(f"Unknown phase: {phase_name}, skipping", "warning")
@@ -1044,6 +1116,23 @@ Output critique_report.json with:
             phase_fn = all_phases[phase_name]
             result = await phase_fn()
             results.append(result)
+            phases_executed.append(phase_name)
+
+            # After requirements phase, check if complexity changed (interactive mode)
+            if phase_name == "requirements" and self.assessment.complexity != initial_complexity:
+                new_phases = self.assessment.phases_to_run()
+                # Get remaining phases that weren't in original list
+                remaining_original = [p for p in phases_to_run if p not in phases_executed]
+                remaining_new = [p for p in new_phases if p not in phases_executed]
+
+                if remaining_original != remaining_new:
+                    print()
+                    print(f"  {muted('Complexity changed:')} {initial_complexity.value} → {highlight(self.assessment.complexity.value.upper())}")
+                    print(f"  {muted('Updating remaining phases...')}")
+                    # Replace remaining phases with new assessment
+                    phases_to_run = phases_executed + remaining_new
+                    print(f"  {muted('New phases:')} {', '.join(remaining_new)}")
+                    print()
 
             if not result.success:
                 print()
@@ -1063,7 +1152,7 @@ Output critique_report.json with:
 
         print(box(
             f"Complexity: {self.assessment.complexity.value.upper()}\n"
-            f"Phases run: {len(phases_to_run)}\n"
+            f"Phases run: {len(phases_executed) + 1}\n"  # +1 for complexity_assessment
             f"Spec saved to: {self.spec_dir}\n\n"
             f"Files created:\n" +
             "\n".join(f"  {icon(Icons.SUCCESS)} {f}" for f in files_created),
@@ -1109,7 +1198,12 @@ Examples:
     parser.add_argument(
         "--task",
         type=str,
-        help="Task description (what to build)",
+        help="Task description (what to build). For very long descriptions, use --task-file instead.",
+    )
+    parser.add_argument(
+        "--task-file",
+        type=Path,
+        help="Read task description from a file (useful for long specs)",
     )
     parser.add_argument(
         "--interactive",
@@ -1137,11 +1231,30 @@ Examples:
     parser.add_argument(
         "--model",
         type=str,
-        default="claude-sonnet-4-20250514",
+        default="claude-opus-4-5-20251101",
         help="Model to use for agent phases",
     )
 
     args = parser.parse_args()
+
+    # Handle task from file if provided
+    task_description = args.task
+    if args.task_file:
+        if not args.task_file.exists():
+            print(f"Error: Task file not found: {args.task_file}")
+            sys.exit(1)
+        task_description = args.task_file.read_text().strip()
+        if not task_description:
+            print(f"Error: Task file is empty: {args.task_file}")
+            sys.exit(1)
+
+    # Validate task description isn't problematic
+    if task_description:
+        # Warn about very long descriptions but don't block
+        if len(task_description) > 5000:
+            print(f"Warning: Task description is very long ({len(task_description)} chars). Consider breaking into subtasks.")
+        # Sanitize null bytes which could cause issues
+        task_description = task_description.replace('\x00', '')
 
     # Find project root (look for auto-build folder)
     project_dir = args.project_dir
@@ -1154,14 +1267,14 @@ Examples:
 
     orchestrator = SpecOrchestrator(
         project_dir=project_dir,
-        task_description=args.task,
+        task_description=task_description,
         spec_name=args.continue_spec,
         model=args.model,
         complexity_override=args.complexity,
     )
 
     try:
-        success = asyncio.run(orchestrator.run(interactive=args.interactive or not args.task))
+        success = asyncio.run(orchestrator.run(interactive=args.interactive or not task_description))
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\n\nSpec creation interrupted.")
