@@ -64,6 +64,7 @@ IDEATION_TYPES = [
     "documentation_gaps",
     "security_hardening",
     "performance_optimizations",
+    "code_quality",
 ]
 
 IDEATION_TYPE_LABELS = {
@@ -73,6 +74,7 @@ IDEATION_TYPE_LABELS = {
     "documentation_gaps": "Documentation Gaps",
     "security_hardening": "Security Hardening",
     "performance_optimizations": "Performance Optimizations",
+    "code_quality": "Code Quality & Refactoring",
 }
 
 IDEATION_TYPE_PROMPTS = {
@@ -82,6 +84,7 @@ IDEATION_TYPE_PROMPTS = {
     "documentation_gaps": "ideation_documentation.md",
     "security_hardening": "ideation_security.md",
     "performance_optimizations": "ideation_performance.md",
+    "code_quality": "ideation_code_quality.md",
 }
 
 

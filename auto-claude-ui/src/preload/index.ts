@@ -40,6 +40,8 @@ import type {
   IdeationGenerationStatus,
   AutoBuildSourceUpdateCheck,
   AutoBuildSourceUpdateProgress,
+  SourceEnvConfig,
+  SourceEnvCheckResult,
   ChangelogTask,
   TaskSpecContent,
   ChangelogGenerationRequest,
@@ -594,6 +596,19 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener(IPC_CHANNELS.AUTOBUILD_SOURCE_PROGRESS, handler);
     };
   },
+
+  // ============================================
+  // Auto-Build Source Environment Operations
+  // ============================================
+
+  getSourceEnv: (): Promise<IPCResult<SourceEnvConfig>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_GET),
+
+  updateSourceEnv: (config: { claudeOAuthToken?: string }): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_UPDATE, config),
+
+  checkSourceToken: (): Promise<IPCResult<SourceEnvCheckResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_CHECK_TOKEN),
 
   // ============================================
   // Changelog Operations

@@ -10,7 +10,11 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  CloudDownload
+  CloudDownload,
+  Key,
+  Eye,
+  EyeOff,
+  Info
 } from 'lucide-react';
 import {
   Dialog,
@@ -59,6 +63,10 @@ export function AppSettingsDialog({ open, onOpenChange }: AppSettingsDialogProps
   const [isCheckingSourceUpdate, setIsCheckingSourceUpdate] = useState(false);
   const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<AutoBuildSourceUpdateProgress | null>(null);
+
+  // Password visibility toggles for global API keys
+  const [showGlobalClaudeToken, setShowGlobalClaudeToken] = useState(false);
+  const [showGlobalOpenAIKey, setShowGlobalOpenAIKey] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -292,6 +300,78 @@ export function AppSettingsDialog({ open, onOpenChange }: AppSettingsDialogProps
                 />
                 <p className="text-xs text-muted-foreground">
                   Relative path to auto-claude directory in projects
+                </p>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Global API Keys */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                <h3 className="text-sm font-semibold text-foreground">Global API Keys</h3>
+              </div>
+              <div className="rounded-lg bg-info/10 border border-info/30 p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-info flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-muted-foreground">
+                    Set API keys here to use them across all projects. Individual projects can override these in their settings.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="globalClaudeToken" className="text-sm font-medium text-foreground">
+                  Claude OAuth Token
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="globalClaudeToken"
+                    type={showGlobalClaudeToken ? 'text' : 'password'}
+                    placeholder="Enter your Claude OAuth token..."
+                    value={settings.globalClaudeOAuthToken || ''}
+                    onChange={(e) =>
+                      setSettings({ ...settings, globalClaudeOAuthToken: e.target.value || undefined })
+                    }
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGlobalClaudeToken(!showGlobalClaudeToken)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showGlobalClaudeToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Get your token by running <code className="px-1 py-0.5 bg-muted rounded font-mono">claude setup-token</code>
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="globalOpenAIKey" className="text-sm font-medium text-foreground">
+                  OpenAI API Key
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="globalOpenAIKey"
+                    type={showGlobalOpenAIKey ? 'text' : 'password'}
+                    placeholder="sk-..."
+                    value={settings.globalOpenAIApiKey || ''}
+                    onChange={(e) =>
+                      setSettings({ ...settings, globalOpenAIApiKey: e.target.value || undefined })
+                    }
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGlobalOpenAIKey(!showGlobalOpenAIKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showGlobalOpenAIKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Required for Graphiti memory backend (embeddings)
                 </p>
               </div>
             </section>

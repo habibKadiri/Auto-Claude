@@ -73,11 +73,14 @@ export class AgentManager extends EventEmitter {
   private loadAutoBuildEnv(): Record<string, string> {
     const autoBuildSource = this.getAutoBuildSourcePath();
     if (!autoBuildSource) {
+      console.log('[loadAutoBuildEnv] No auto-build source path found');
       return {};
     }
 
     const envPath = path.join(autoBuildSource, '.env');
+    console.log('[loadAutoBuildEnv] Looking for .env at:', envPath);
     if (!existsSync(envPath)) {
+      console.log('[loadAutoBuildEnv] .env file does not exist');
       return {};
     }
 
@@ -230,17 +233,17 @@ export class AgentManager extends EventEmitter {
 
     const args = [ideationRunnerPath, '--project', projectPath];
 
-    // Add enabled types
+    // Add enabled types as comma-separated list
     if (config.enabledTypes.length > 0) {
-      args.push('--types', ...config.enabledTypes);
+      args.push('--types', config.enabledTypes.join(','));
     }
 
-    // Add context flags
-    if (config.includeRoadmapContext) {
-      args.push('--include-roadmap');
+    // Add context flags (script uses --no-roadmap/--no-kanban negative flags)
+    if (!config.includeRoadmapContext) {
+      args.push('--no-roadmap');
     }
-    if (config.includeKanbanContext) {
-      args.push('--include-kanban');
+    if (!config.includeKanbanContext) {
+      args.push('--no-kanban');
     }
 
     // Add max ideas per type
@@ -299,10 +302,17 @@ export class AgentManager extends EventEmitter {
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.length > 0) {
+          console.log('[Ideation]', trimmed);
           this.emit('ideation-log', projectId, trimmed);
         }
       }
     };
+
+    console.log('[Ideation] Starting ideation process with args:', args);
+    console.log('[Ideation] CWD:', cwd);
+    console.log('[Ideation] Python path:', this.pythonPath);
+    console.log('[Ideation] Env vars loaded:', Object.keys(autoBuildEnv));
+    console.log('[Ideation] Has CLAUDE_CODE_OAUTH_TOKEN:', !!autoBuildEnv['CLAUDE_CODE_OAUTH_TOKEN']);
 
     // Handle stdout
     childProcess.stdout?.on('data', (data: Buffer) => {
@@ -356,6 +366,7 @@ export class AgentManager extends EventEmitter {
     // Handle stderr - also emit as logs
     childProcess.stderr?.on('data', (data: Buffer) => {
       const log = data.toString();
+      console.error('[Ideation STDERR]', log);
       emitLogs(log);
       this.emit('ideation-progress', projectId, {
         phase: progressPhase,
@@ -366,6 +377,7 @@ export class AgentManager extends EventEmitter {
 
     // Handle process exit
     childProcess.on('exit', (code: number | null) => {
+      console.log('[Ideation] Process exited with code:', code);
       this.processes.delete(projectId);
 
       if (code === 0) {
@@ -381,6 +393,7 @@ export class AgentManager extends EventEmitter {
 
     // Handle process error
     childProcess.on('error', (err: Error) => {
+      console.error('[Ideation] Process error:', err.message);
       this.processes.delete(projectId);
       this.emit('ideation-error', projectId, err.message);
     });

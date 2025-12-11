@@ -17,7 +17,8 @@ import {
   ChevronUp,
   Import,
   Radio,
-  Github
+  Github,
+  Globe
 } from 'lucide-react';
 import { LinearTaskImportModal } from './LinearTaskImportModal';
 import {
@@ -517,18 +518,35 @@ export function ProjectSettings({ project, open, onOpenChange }: ProjectSettings
 
                           {/* Manual OAuth Token */}
                           <div className="space-y-2">
-                            <Label className="text-sm font-medium text-foreground">
-                              OAuth Token (Manual)
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              Or paste a token directly if you have one from <code className="px-1 bg-muted rounded">claude setup-token</code>
-                            </p>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium text-foreground">
+                                OAuth Token {envConfig.claudeTokenIsGlobal ? '(Override)' : ''}
+                              </Label>
+                              {envConfig.claudeTokenIsGlobal && (
+                                <span className="flex items-center gap-1 text-xs text-info">
+                                  <Globe className="h-3 w-3" />
+                                  Using global token
+                                </span>
+                              )}
+                            </div>
+                            {envConfig.claudeTokenIsGlobal ? (
+                              <p className="text-xs text-muted-foreground">
+                                Using token from App Settings. Enter a project-specific token below to override.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Paste a token from <code className="px-1 bg-muted rounded">claude setup-token</code>
+                              </p>
+                            )}
                             <div className="relative">
                               <Input
                                 type={showClaudeToken ? 'text' : 'password'}
-                                placeholder="your-oauth-token-here"
-                                value={envConfig.claudeOAuthToken || ''}
-                                onChange={(e) => updateEnvConfig({ claudeOAuthToken: e.target.value })}
+                                placeholder={envConfig.claudeTokenIsGlobal ? 'Enter to override global token...' : 'your-oauth-token-here'}
+                                value={envConfig.claudeTokenIsGlobal ? '' : (envConfig.claudeOAuthToken || '')}
+                                onChange={(e) => updateEnvConfig({
+                                  claudeOAuthToken: e.target.value || undefined,
+                                  // When user enters a value, it's no longer global
+                                })}
                                 className="pr-10"
                               />
                               <button
@@ -943,16 +961,32 @@ export function ProjectSettings({ project, open, onOpenChange }: ProjectSettings
                           </div>
 
                           <div className="space-y-2">
-                            <Label className="text-sm font-medium text-foreground">OpenAI API Key</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Required for Graphiti embeddings
-                            </p>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium text-foreground">
+                                OpenAI API Key {envConfig.openaiKeyIsGlobal ? '(Override)' : ''}
+                              </Label>
+                              {envConfig.openaiKeyIsGlobal && (
+                                <span className="flex items-center gap-1 text-xs text-info">
+                                  <Globe className="h-3 w-3" />
+                                  Using global key
+                                </span>
+                              )}
+                            </div>
+                            {envConfig.openaiKeyIsGlobal ? (
+                              <p className="text-xs text-muted-foreground">
+                                Using key from App Settings. Enter a project-specific key below to override.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Required for Graphiti embeddings
+                              </p>
+                            )}
                             <div className="relative">
                               <Input
                                 type={showOpenAIKey ? 'text' : 'password'}
-                                placeholder="sk-xxxxxxxx"
-                                value={envConfig.openaiApiKey || ''}
-                                onChange={(e) => updateEnvConfig({ openaiApiKey: e.target.value })}
+                                placeholder={envConfig.openaiKeyIsGlobal ? 'Enter to override global key...' : 'sk-xxxxxxxx'}
+                                value={envConfig.openaiKeyIsGlobal ? '' : (envConfig.openaiApiKey || '')}
+                                onChange={(e) => updateEnvConfig({ openaiApiKey: e.target.value || undefined })}
                                 className="pr-10"
                               />
                               <button

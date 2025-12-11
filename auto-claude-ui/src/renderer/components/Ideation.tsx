@@ -29,7 +29,8 @@ import {
   Database,
   Wifi,
   Box,
-  HardDrive
+  HardDrive,
+  Code2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -51,6 +52,7 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog';
+import { EnvConfigModal, useClaudeTokenCheck } from './EnvConfigModal';
 import {
   useIdeationStore,
   loadIdeation,
@@ -75,7 +77,9 @@ import {
   UIUX_CATEGORY_LABELS,
   DOCUMENTATION_CATEGORY_LABELS,
   SECURITY_CATEGORY_LABELS,
-  PERFORMANCE_CATEGORY_LABELS
+  PERFORMANCE_CATEGORY_LABELS,
+  CODE_QUALITY_CATEGORY_LABELS,
+  CODE_QUALITY_SEVERITY_COLORS
 } from '../../shared/constants';
 import type {
   Idea,
@@ -86,7 +90,8 @@ import type {
   HighValueFeatureIdea,
   DocumentationGapIdea,
   SecurityHardeningIdea,
-  PerformanceOptimizationIdea
+  PerformanceOptimizationIdea,
+  CodeQualityIdea
 } from '../../shared/types';
 
 interface IdeationProps {
@@ -107,6 +112,8 @@ const TypeIcon = ({ type }: { type: IdeationType }) => {
       return <Shield className="h-4 w-4" />;
     case 'performance_optimizations':
       return <Gauge className="h-4 w-4" />;
+    case 'code_quality':
+      return <Code2 className="h-4 w-4" />;
     default:
       return <Lightbulb className="h-4 w-4" />;
   }
@@ -119,7 +126,8 @@ const ALL_IDEATION_TYPES: IdeationType[] = [
   'high_value_features',
   'documentation_gaps',
   'security_hardening',
-  'performance_optimizations'
+  'performance_optimizations',
+  'code_quality'
 ];
 
 // Type guard functions for new types
@@ -129,6 +137,10 @@ function isDocumentationGapIdea(idea: Idea): idea is DocumentationGapIdea {
 
 function isSecurityHardeningIdea(idea: Idea): idea is SecurityHardeningIdea {
   return idea.type === 'security_hardening';
+}
+
+function isCodeQualityIdea(idea: Idea): idea is CodeQualityIdea {
+  return idea.type === 'code_quality';
 }
 
 function isPerformanceOptimizationIdea(idea: Idea): idea is PerformanceOptimizationIdea {
@@ -217,6 +229,11 @@ export function Ideation({ projectId }: IdeationProps) {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [showEnvConfigModal, setShowEnvConfigModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'generate' | 'refresh' | null>(null);
+
+  // Check if Claude token is configured
+  const { hasToken, isLoading: isCheckingToken, checkToken } = useClaudeTokenCheck();
 
   // Set up IPC listeners and load ideation on mount
   useEffect(() => {
@@ -225,12 +242,35 @@ export function Ideation({ projectId }: IdeationProps) {
     return cleanup;
   }, [projectId]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    // Check token before generating
+    if (hasToken === false) {
+      setPendingAction('generate');
+      setShowEnvConfigModal(true);
+      return;
+    }
     generateIdeation(projectId);
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    // Check token before refreshing
+    if (hasToken === false) {
+      setPendingAction('refresh');
+      setShowEnvConfigModal(true);
+      return;
+    }
     refreshIdeation(projectId);
+  };
+
+  // Handle when env config is complete - execute pending action
+  const handleEnvConfigured = () => {
+    checkToken(); // Re-check the token
+    if (pendingAction === 'generate') {
+      generateIdeation(projectId);
+    } else if (pendingAction === 'refresh') {
+      refreshIdeation(projectId);
+    }
+    setPendingAction(null);
   };
 
   const handleConvertToTask = async (idea: Idea) => {
@@ -315,11 +355,28 @@ export function Ideation({ projectId }: IdeationProps) {
             </div>
           </div>
 
-          <Button onClick={handleGenerate} size="lg">
+          <Button onClick={handleGenerate} size="lg" disabled={isCheckingToken}>
             <Sparkles className="h-4 w-4 mr-2" />
             Generate Ideas
           </Button>
+
+          {/* Show warning if token is missing */}
+          {hasToken === false && !isCheckingToken && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              <AlertCircle className="h-4 w-4 inline-block mr-1 text-warning" />
+              Claude token not configured. You'll be prompted to enter it when generating.
+            </p>
+          )}
         </Card>
+
+        {/* Environment Configuration Modal */}
+        <EnvConfigModal
+          open={showEnvConfigModal}
+          onOpenChange={setShowEnvConfigModal}
+          onConfigured={handleEnvConfigured}
+          title="Claude Authentication Required"
+          description="A Claude Code OAuth token is required to generate AI-powered feature ideas."
+        />
       </div>
     );
   }
@@ -540,6 +597,15 @@ export function Ideation({ projectId }: IdeationProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Environment Configuration Modal */}
+      <EnvConfigModal
+        open={showEnvConfigModal}
+        onOpenChange={setShowEnvConfigModal}
+        onConfigured={handleEnvConfigured}
+        title="Claude Authentication Required"
+        description="A Claude Code OAuth token is required to generate AI-powered feature ideas."
+      />
     </div>
   );
 }
@@ -603,6 +669,11 @@ function IdeaCard({ idea, onClick, onConvert, onDismiss }: IdeaCardProps) {
             {isPerformanceOptimizationIdea(idea) && (
               <Badge variant="outline" className={IDEATION_IMPACT_COLORS[(idea as PerformanceOptimizationIdea).impact]}>
                 {(idea as PerformanceOptimizationIdea).impact} impact
+              </Badge>
+            )}
+            {isCodeQualityIdea(idea) && (
+              <Badge variant="outline" className={CODE_QUALITY_SEVERITY_COLORS[(idea as CodeQualityIdea).severity]}>
+                {(idea as CodeQualityIdea).severity}
               </Badge>
             )}
           </div>
@@ -729,6 +800,10 @@ function IdeaDetailPanel({ idea, onClose, onConvert, onDismiss }: IdeaDetailPane
 
         {isPerformanceOptimizationIdea(idea) && (
           <PerformanceOptimizationDetails idea={idea as PerformanceOptimizationIdea} />
+        )}
+
+        {isCodeQualityIdea(idea) && (
+          <CodeQualityDetails idea={idea as CodeQualityIdea} />
         )}
       </div>
 
@@ -1252,6 +1327,162 @@ function PerformanceOptimizationDetails({ idea }: { idea: PerformanceOptimizatio
             Tradeoffs
           </h3>
           <p className="text-sm text-muted-foreground">{idea.tradeoffs}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function CodeQualityDetails({ idea }: { idea: CodeQualityIdea }) {
+  return (
+    <>
+      {/* Metrics */}
+      <div className="grid grid-cols-2 gap-2">
+        <Card className="p-3 text-center">
+          <div className={`text-lg font-semibold ${CODE_QUALITY_SEVERITY_COLORS[idea.severity]}`}>
+            {idea.severity}
+          </div>
+          <div className="text-xs text-muted-foreground">Severity</div>
+        </Card>
+        <Card className="p-3 text-center">
+          <div className={`text-lg font-semibold ${IDEATION_EFFORT_COLORS[idea.estimatedEffort]}`}>
+            {idea.estimatedEffort}
+          </div>
+          <div className="text-xs text-muted-foreground">Effort</div>
+        </Card>
+      </div>
+
+      {/* Category */}
+      <div>
+        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+          <Code2 className="h-4 w-4" />
+          Category
+        </h3>
+        <Badge variant="outline">
+          {CODE_QUALITY_CATEGORY_LABELS[idea.category]}
+        </Badge>
+      </div>
+
+      {/* Breaking Change Warning */}
+      {idea.breakingChange && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <span className="text-sm font-medium text-destructive">Breaking Change</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            This refactoring may break existing code or tests.
+          </p>
+        </div>
+      )}
+
+      {/* Current State */}
+      <div>
+        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" />
+          Current State
+        </h3>
+        <p className="text-sm text-muted-foreground">{idea.currentState}</p>
+      </div>
+
+      {/* Proposed Change */}
+      <div>
+        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-success" />
+          Proposed Change
+        </h3>
+        <p className="text-sm text-muted-foreground whitespace-pre-line">{idea.proposedChange}</p>
+      </div>
+
+      {/* Code Example */}
+      {idea.codeExample && (
+        <div>
+          <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <FileCode className="h-4 w-4" />
+            Code Example
+          </h3>
+          <pre className="text-xs font-mono bg-muted/50 p-3 rounded-lg overflow-x-auto">
+            {idea.codeExample}
+          </pre>
+        </div>
+      )}
+
+      {/* Metrics (if available) */}
+      {idea.metrics && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Metrics</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {idea.metrics.lineCount && (
+              <Card className="p-2 text-center">
+                <div className="text-sm font-semibold">{idea.metrics.lineCount}</div>
+                <div className="text-xs text-muted-foreground">Lines</div>
+              </Card>
+            )}
+            {idea.metrics.complexity && (
+              <Card className="p-2 text-center">
+                <div className="text-sm font-semibold">{idea.metrics.complexity}</div>
+                <div className="text-xs text-muted-foreground">Complexity</div>
+              </Card>
+            )}
+            {idea.metrics.duplicateLines && (
+              <Card className="p-2 text-center">
+                <div className="text-sm font-semibold">{idea.metrics.duplicateLines}</div>
+                <div className="text-xs text-muted-foreground">Duplicate Lines</div>
+              </Card>
+            )}
+            {idea.metrics.testCoverage !== undefined && (
+              <Card className="p-2 text-center">
+                <div className="text-sm font-semibold">{idea.metrics.testCoverage}%</div>
+                <div className="text-xs text-muted-foreground">Test Coverage</div>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Affected Files */}
+      {idea.affectedFiles.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <FileCode className="h-4 w-4" />
+            Affected Files
+          </h3>
+          <ul className="space-y-1">
+            {idea.affectedFiles.map((file, i) => (
+              <li key={i} className="text-sm font-mono text-muted-foreground">
+                {file}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Best Practice */}
+      {idea.bestPractice && (
+        <div>
+          <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Best Practice
+          </h3>
+          <p className="text-sm text-muted-foreground">{idea.bestPractice}</p>
+        </div>
+      )}
+
+      {/* Prerequisites */}
+      {idea.prerequisites && idea.prerequisites.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Prerequisites
+          </h3>
+          <ul className="space-y-1">
+            {idea.prerequisites.map((prereq, i) => (
+              <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                <span className="text-muted-foreground">•</span>
+                {prereq}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </>

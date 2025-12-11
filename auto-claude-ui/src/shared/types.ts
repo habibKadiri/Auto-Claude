@@ -135,6 +135,9 @@ export interface AppSettings {
   autoBuildPath?: string;
   autoUpdateAutoBuild: boolean;
   notifications: NotificationSettings;
+  // Global API keys (used as defaults for all projects)
+  globalClaudeOAuthToken?: string;
+  globalOpenAIApiKey?: string;
 }
 
 // Auto Claude Initialization Types
@@ -380,7 +383,8 @@ export type IdeationType =
   | 'high_value_features'
   | 'documentation_gaps'
   | 'security_hardening'
-  | 'performance_optimizations';
+  | 'performance_optimizations'
+  | 'code_quality';
 export type IdeationStatus = 'draft' | 'selected' | 'converted' | 'dismissed';
 export type IdeationGenerationPhase = 'idle' | 'analyzing' | 'discovering' | 'generating' | 'complete' | 'error';
 
@@ -465,13 +469,34 @@ export interface PerformanceOptimizationIdea extends IdeaBase {
   estimatedEffort: 'trivial' | 'small' | 'medium' | 'large';
 }
 
+export interface CodeQualityIdea extends IdeaBase {
+  type: 'code_quality';
+  category: 'large_files' | 'code_smells' | 'complexity' | 'duplication' | 'naming' | 'structure' | 'linting' | 'testing' | 'types' | 'dependencies' | 'dead_code' | 'git_hygiene';
+  severity: 'suggestion' | 'minor' | 'major' | 'critical';
+  affectedFiles: string[];  // Files that need refactoring
+  currentState: string;  // Description of the current problematic state
+  proposedChange: string;  // What should be done
+  codeExample?: string;  // Example of problematic code (if applicable)
+  bestPractice?: string;  // Reference to best practice being violated
+  metrics?: {
+    lineCount?: number;  // For large files
+    complexity?: number;  // Cyclomatic complexity if applicable
+    duplicateLines?: number;  // For duplication issues
+    testCoverage?: number;  // Current test coverage percentage
+  };
+  estimatedEffort: 'trivial' | 'small' | 'medium' | 'large';
+  breakingChange: boolean;  // Whether this refactoring could break existing code
+  prerequisites?: string[];  // Things that should be done first
+}
+
 export type Idea =
   | LowHangingFruitIdea
   | UIUXImprovementIdea
   | HighValueFeatureIdea
   | DocumentationGapIdea
   | SecurityHardeningIdea
-  | PerformanceOptimizationIdea;
+  | PerformanceOptimizationIdea
+  | CodeQualityIdea;
 
 export interface IdeationSession {
   id: string;
@@ -508,6 +533,8 @@ export interface ProjectEnvConfig {
   // Claude Authentication
   claudeOAuthToken?: string;
   claudeAuthStatus: 'authenticated' | 'token_set' | 'not_configured';
+  // Indicates if the Claude token is from global settings (not project-specific)
+  claudeTokenIsGlobal?: boolean;
 
   // Model Override
   autoBuildModel?: string;
@@ -528,6 +555,8 @@ export interface ProjectEnvConfig {
   // Graphiti Memory Integration
   graphitiEnabled: boolean;
   openaiApiKey?: string;
+  // Indicates if the OpenAI key is from global settings (not project-specific)
+  openaiKeyIsGlobal?: boolean;
   graphitiFalkorDbHost?: string;
   graphitiFalkorDbPort?: number;
   graphitiFalkorDbPassword?: string;
@@ -535,6 +564,23 @@ export interface ProjectEnvConfig {
 
   // UI Settings
   enableFancyUi: boolean;
+}
+
+// Auto-Claude Source Environment Configuration (for auto-claude repo .env)
+export interface SourceEnvConfig {
+  // Claude Authentication (required for ideation, roadmap generation, etc.)
+  hasClaudeToken: boolean;
+  claudeOAuthToken?: string;
+
+  // Source path info
+  sourcePath?: string;
+  envExists: boolean;
+}
+
+export interface SourceEnvCheckResult {
+  hasToken: boolean;
+  sourcePath?: string;
+  error?: string;
 }
 
 // ============================================
@@ -920,6 +966,11 @@ export interface ElectronAPI {
   onAutoBuildSourceUpdateProgress: (
     callback: (progress: AutoBuildSourceUpdateProgress) => void
   ) => () => void;
+
+  // Auto Claude source environment operations
+  getSourceEnv: () => Promise<IPCResult<SourceEnvConfig>>;
+  updateSourceEnv: (config: { claudeOAuthToken?: string }) => Promise<IPCResult>;
+  checkSourceToken: () => Promise<IPCResult<SourceEnvCheckResult>>;
 
   // Changelog operations
   getChangelogDoneTasks: (projectId: string) => Promise<IPCResult<ChangelogTask[]>>;

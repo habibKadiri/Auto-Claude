@@ -40,22 +40,27 @@ export const CHUNK_STATUS_COLORS: Record<string, string> = {
 // Default app settings
 export const DEFAULT_APP_SETTINGS = {
   theme: 'system' as const,
-  defaultModel: 'sonnet',
+  defaultModel: 'opus',
   defaultParallelism: 1,
+  pythonPath: undefined as string | undefined,
+  autoBuildPath: undefined as string | undefined,
   autoUpdateAutoBuild: true,
   notifications: {
     onTaskComplete: true,
     onTaskFailed: true,
     onReviewNeeded: true,
     sound: false
-  }
+  },
+  // Global API keys (used as defaults for all projects)
+  globalClaudeOAuthToken: undefined as string | undefined,
+  globalOpenAIApiKey: undefined as string | undefined
 };
 
 // Default project settings
 export const DEFAULT_PROJECT_SETTINGS = {
   parallelEnabled: false,
   maxWorkers: 2,
-  model: 'sonnet',
+  model: 'opus',
   memoryBackend: 'file' as const,
   linearSync: false,
   notifications: {
@@ -177,6 +182,11 @@ export const IPC_CHANNELS = {
   AUTOBUILD_SOURCE_VERSION: 'autobuild:source:version',
   AUTOBUILD_SOURCE_PROGRESS: 'autobuild:source:progress',
 
+  // Auto Claude source environment configuration
+  AUTOBUILD_SOURCE_ENV_GET: 'autobuild:source:env:get',
+  AUTOBUILD_SOURCE_ENV_UPDATE: 'autobuild:source:env:update',
+  AUTOBUILD_SOURCE_ENV_CHECK_TOKEN: 'autobuild:source:env:checkToken',
+
   // Changelog operations
   CHANGELOG_GET_DONE_TASKS: 'changelog:getDoneTasks',
   CHANGELOG_LOAD_TASK_SPECS: 'changelog:loadTaskSpecs',
@@ -241,9 +251,9 @@ export const ROADMAP_IMPACT_COLORS: Record<string, string> = {
 
 // Models available for selection
 export const AVAILABLE_MODELS = [
-  { value: 'sonnet', label: 'Claude Sonnet' },
-  { value: 'opus', label: 'Claude Opus' },
-  { value: 'haiku', label: 'Claude Haiku' }
+  { value: 'opus', label: 'Claude Opus 4.5' },
+  { value: 'sonnet', label: 'Claude Sonnet 4' },
+  { value: 'haiku', label: 'Claude Haiku 3.5' }
 ] as const;
 
 // Memory backends
@@ -263,7 +273,8 @@ export const IDEATION_TYPE_LABELS: Record<string, string> = {
   high_value_features: 'High-Value Features',
   documentation_gaps: 'Documentation',
   security_hardening: 'Security',
-  performance_optimizations: 'Performance'
+  performance_optimizations: 'Performance',
+  code_quality: 'Code Quality'
 };
 
 export const IDEATION_TYPE_DESCRIPTIONS: Record<string, string> = {
@@ -272,7 +283,8 @@ export const IDEATION_TYPE_DESCRIPTIONS: Record<string, string> = {
   high_value_features: 'Strategic features that provide significant value to target users',
   documentation_gaps: 'Missing or outdated documentation that needs attention',
   security_hardening: 'Security vulnerabilities and hardening opportunities',
-  performance_optimizations: 'Performance bottlenecks and optimization opportunities'
+  performance_optimizations: 'Performance bottlenecks and optimization opportunities',
+  code_quality: 'Refactoring opportunities, large files, code smells, and best practice violations'
 };
 
 // Ideation type colors
@@ -282,7 +294,8 @@ export const IDEATION_TYPE_COLORS: Record<string, string> = {
   high_value_features: 'bg-primary/10 text-primary border-primary/30',
   documentation_gaps: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
   security_hardening: 'bg-destructive/10 text-destructive border-destructive/30',
-  performance_optimizations: 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+  performance_optimizations: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+  code_quality: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
 };
 
 // Ideation type icons (Lucide icon names)
@@ -292,7 +305,8 @@ export const IDEATION_TYPE_ICONS: Record<string, string> = {
   high_value_features: 'Target',
   documentation_gaps: 'BookOpen',
   security_hardening: 'Shield',
-  performance_optimizations: 'Gauge'
+  performance_optimizations: 'Gauge',
+  code_quality: 'Code2'
 };
 
 // Ideation status colors
@@ -366,6 +380,30 @@ export const PERFORMANCE_CATEGORY_LABELS: Record<string, string> = {
   network: 'Network Requests',
   rendering: 'Rendering',
   caching: 'Caching'
+};
+
+// Code quality category labels
+export const CODE_QUALITY_CATEGORY_LABELS: Record<string, string> = {
+  large_files: 'Large Files',
+  code_smells: 'Code Smells',
+  complexity: 'High Complexity',
+  duplication: 'Code Duplication',
+  naming: 'Naming Conventions',
+  structure: 'File Structure',
+  linting: 'Linting Issues',
+  testing: 'Test Coverage',
+  types: 'Type Safety',
+  dependencies: 'Dependency Issues',
+  dead_code: 'Dead Code',
+  git_hygiene: 'Git Hygiene'
+};
+
+// Code quality severity colors
+export const CODE_QUALITY_SEVERITY_COLORS: Record<string, string> = {
+  suggestion: 'bg-info/10 text-info',
+  minor: 'bg-warning/10 text-warning',
+  major: 'bg-orange-500/10 text-orange-500',
+  critical: 'bg-destructive/10 text-destructive'
 };
 
 // Default ideation config

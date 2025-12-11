@@ -11,3 +11,4 @@ export * from './Ideation';
 export * from './GitHubIssues';
 export * from './Changelog';
 export * from './WelcomeScreen';
+export * from './EnvConfigModal';

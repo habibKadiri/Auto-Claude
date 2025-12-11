@@ -40,7 +40,9 @@ import type {
   IdeationSession,
   IdeationConfig,
   IdeationGenerationStatus,
-  IdeationStatus
+  IdeationStatus,
+  SourceEnvConfig,
+  SourceEnvCheckResult
 } from '../shared/types';
 import { projectStore } from './project-store';
 import { fileWatcher } from './file-watcher';
@@ -494,16 +496,26 @@ export function setupIpcHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_GET,
     async (): Promise<IPCResult<AppSettings>> => {
+      let settings = { ...DEFAULT_APP_SETTINGS };
+
       if (existsSync(settingsPath)) {
         try {
           const content = readFileSync(settingsPath, 'utf-8');
-          const settings = JSON.parse(content);
-          return { success: true, data: { ...DEFAULT_APP_SETTINGS, ...settings } };
+          settings = { ...settings, ...JSON.parse(content) };
         } catch {
-          return { success: true, data: DEFAULT_APP_SETTINGS as AppSettings };
+          // Use defaults
         }
       }
-      return { success: true, data: DEFAULT_APP_SETTINGS as AppSettings };
+
+      // If no manual autoBuildPath is set, try to auto-detect
+      if (!settings.autoBuildPath) {
+        const detectedPath = detectAutoBuildSourcePath();
+        if (detectedPath) {
+          settings.autoBuildPath = detectedPath;
+        }
+      }
+
+      return { success: true, data: settings as AppSettings };
     }
   );
 
@@ -1479,89 +1491,111 @@ ${existingVars['GRAPHITI_DATABASE'] ? `GRAPHITI_DATABASE=${existingVars['GRAPHIT
 
       const envPath = path.join(project.path, project.autoBuildPath, '.env');
 
+      // Load global settings for fallbacks
+      let globalSettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
+      if (existsSync(settingsPath)) {
+        try {
+          const content = readFileSync(settingsPath, 'utf-8');
+          globalSettings = { ...globalSettings, ...JSON.parse(content) };
+        } catch {
+          // Use defaults
+        }
+      }
+
       // Default config
       const config: ProjectEnvConfig = {
         claudeAuthStatus: 'not_configured',
         linearEnabled: false,
         githubEnabled: false,
         graphitiEnabled: false,
-        enableFancyUi: true
+        enableFancyUi: true,
+        claudeTokenIsGlobal: false,
+        openaiKeyIsGlobal: false
       };
 
-      if (!existsSync(envPath)) {
-        return { success: true, data: config };
+      // Parse project-specific .env if it exists
+      let vars: Record<string, string> = {};
+      if (existsSync(envPath)) {
+        try {
+          const content = readFileSync(envPath, 'utf-8');
+          vars = parseEnvFile(content);
+        } catch {
+          // Continue with empty vars
+        }
       }
 
-      try {
-        const content = readFileSync(envPath, 'utf-8');
-        const vars = parseEnvFile(content);
-
-        // Parse values into config
-        if (vars['CLAUDE_CODE_OAUTH_TOKEN']) {
-          config.claudeOAuthToken = vars['CLAUDE_CODE_OAUTH_TOKEN'];
-          config.claudeAuthStatus = 'token_set';
-        }
-
-        if (vars['AUTO_BUILD_MODEL']) {
-          config.autoBuildModel = vars['AUTO_BUILD_MODEL'];
-        }
-
-        if (vars['LINEAR_API_KEY']) {
-          config.linearEnabled = true;
-          config.linearApiKey = vars['LINEAR_API_KEY'];
-        }
-        if (vars['LINEAR_TEAM_ID']) {
-          config.linearTeamId = vars['LINEAR_TEAM_ID'];
-        }
-        if (vars['LINEAR_PROJECT_ID']) {
-          config.linearProjectId = vars['LINEAR_PROJECT_ID'];
-        }
-        if (vars['LINEAR_REALTIME_SYNC']?.toLowerCase() === 'true') {
-          config.linearRealtimeSync = true;
-        }
-
-        // GitHub config
-        if (vars['GITHUB_TOKEN']) {
-          config.githubEnabled = true;
-          config.githubToken = vars['GITHUB_TOKEN'];
-        }
-        if (vars['GITHUB_REPO']) {
-          config.githubRepo = vars['GITHUB_REPO'];
-        }
-        if (vars['GITHUB_AUTO_SYNC']?.toLowerCase() === 'true') {
-          config.githubAutoSync = true;
-        }
-
-        if (vars['GRAPHITI_ENABLED']?.toLowerCase() === 'true') {
-          config.graphitiEnabled = true;
-        }
-        if (vars['OPENAI_API_KEY']) {
-          config.openaiApiKey = vars['OPENAI_API_KEY'];
-        }
-        if (vars['GRAPHITI_FALKORDB_HOST']) {
-          config.graphitiFalkorDbHost = vars['GRAPHITI_FALKORDB_HOST'];
-        }
-        if (vars['GRAPHITI_FALKORDB_PORT']) {
-          config.graphitiFalkorDbPort = parseInt(vars['GRAPHITI_FALKORDB_PORT'], 10);
-        }
-        if (vars['GRAPHITI_FALKORDB_PASSWORD']) {
-          config.graphitiFalkorDbPassword = vars['GRAPHITI_FALKORDB_PASSWORD'];
-        }
-        if (vars['GRAPHITI_DATABASE']) {
-          config.graphitiDatabase = vars['GRAPHITI_DATABASE'];
-        }
-
-        if (vars['ENABLE_FANCY_UI']?.toLowerCase() === 'false') {
-          config.enableFancyUi = false;
-        }
-
-        return { success: true, data: config };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to read .env file'
-        };
+      // Claude OAuth Token: project-specific takes precedence, then global
+      if (vars['CLAUDE_CODE_OAUTH_TOKEN']) {
+        config.claudeOAuthToken = vars['CLAUDE_CODE_OAUTH_TOKEN'];
+        config.claudeAuthStatus = 'token_set';
+        config.claudeTokenIsGlobal = false;
+      } else if (globalSettings.globalClaudeOAuthToken) {
+        config.claudeOAuthToken = globalSettings.globalClaudeOAuthToken;
+        config.claudeAuthStatus = 'token_set';
+        config.claudeTokenIsGlobal = true;
       }
+
+      if (vars['AUTO_BUILD_MODEL']) {
+        config.autoBuildModel = vars['AUTO_BUILD_MODEL'];
+      }
+
+      if (vars['LINEAR_API_KEY']) {
+        config.linearEnabled = true;
+        config.linearApiKey = vars['LINEAR_API_KEY'];
+      }
+      if (vars['LINEAR_TEAM_ID']) {
+        config.linearTeamId = vars['LINEAR_TEAM_ID'];
+      }
+      if (vars['LINEAR_PROJECT_ID']) {
+        config.linearProjectId = vars['LINEAR_PROJECT_ID'];
+      }
+      if (vars['LINEAR_REALTIME_SYNC']?.toLowerCase() === 'true') {
+        config.linearRealtimeSync = true;
+      }
+
+      // GitHub config
+      if (vars['GITHUB_TOKEN']) {
+        config.githubEnabled = true;
+        config.githubToken = vars['GITHUB_TOKEN'];
+      }
+      if (vars['GITHUB_REPO']) {
+        config.githubRepo = vars['GITHUB_REPO'];
+      }
+      if (vars['GITHUB_AUTO_SYNC']?.toLowerCase() === 'true') {
+        config.githubAutoSync = true;
+      }
+
+      if (vars['GRAPHITI_ENABLED']?.toLowerCase() === 'true') {
+        config.graphitiEnabled = true;
+      }
+
+      // OpenAI API Key: project-specific takes precedence, then global
+      if (vars['OPENAI_API_KEY']) {
+        config.openaiApiKey = vars['OPENAI_API_KEY'];
+        config.openaiKeyIsGlobal = false;
+      } else if (globalSettings.globalOpenAIApiKey) {
+        config.openaiApiKey = globalSettings.globalOpenAIApiKey;
+        config.openaiKeyIsGlobal = true;
+      }
+
+      if (vars['GRAPHITI_FALKORDB_HOST']) {
+        config.graphitiFalkorDbHost = vars['GRAPHITI_FALKORDB_HOST'];
+      }
+      if (vars['GRAPHITI_FALKORDB_PORT']) {
+        config.graphitiFalkorDbPort = parseInt(vars['GRAPHITI_FALKORDB_PORT'], 10);
+      }
+      if (vars['GRAPHITI_FALKORDB_PASSWORD']) {
+        config.graphitiFalkorDbPassword = vars['GRAPHITI_FALKORDB_PASSWORD'];
+      }
+      if (vars['GRAPHITI_DATABASE']) {
+        config.graphitiDatabase = vars['GRAPHITI_DATABASE'];
+      }
+
+      if (vars['ENABLE_FANCY_UI']?.toLowerCase() === 'false') {
+        config.enableFancyUi = false;
+      }
+
+      return { success: true, data: config };
     }
   );
 
@@ -2786,6 +2820,207 @@ ${issue.body || 'No description provided.'}
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to get version'
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Auto Claude Source Environment Operations
+  // ============================================
+
+  /**
+   * Parse an .env file content into a key-value object
+   */
+  const parseSourceEnvFile = (content: string): Record<string, string> => {
+    const vars: Record<string, string> = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const eqIndex = trimmed.indexOf('=');
+      if (eqIndex > 0) {
+        const key = trimmed.substring(0, eqIndex).trim();
+        let value = trimmed.substring(eqIndex + 1).trim();
+        // Remove quotes if present
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        vars[key] = value;
+      }
+    }
+    return vars;
+  };
+
+  ipcMain.handle(
+    IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_GET,
+    async (): Promise<IPCResult<SourceEnvConfig>> => {
+      try {
+        const sourcePath = getEffectiveSourcePath();
+        if (!sourcePath) {
+          return {
+            success: true,
+            data: {
+              hasClaudeToken: false,
+              envExists: false,
+              sourcePath: undefined
+            }
+          };
+        }
+
+        const envPath = path.join(sourcePath, '.env');
+        const envExists = existsSync(envPath);
+
+        if (!envExists) {
+          return {
+            success: true,
+            data: {
+              hasClaudeToken: false,
+              envExists: false,
+              sourcePath
+            }
+          };
+        }
+
+        const content = readFileSync(envPath, 'utf-8');
+        const vars = parseSourceEnvFile(content);
+        const hasToken = !!vars['CLAUDE_CODE_OAUTH_TOKEN'];
+
+        return {
+          success: true,
+          data: {
+            hasClaudeToken: hasToken,
+            claudeOAuthToken: hasToken ? vars['CLAUDE_CODE_OAUTH_TOKEN'] : undefined,
+            envExists: true,
+            sourcePath
+          }
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get source env'
+        };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_UPDATE,
+    async (_, config: { claudeOAuthToken?: string }): Promise<IPCResult> => {
+      try {
+        const sourcePath = getEffectiveSourcePath();
+        if (!sourcePath) {
+          return {
+            success: false,
+            error: 'Auto-Claude source path not found. Please configure it in App Settings.'
+          };
+        }
+
+        const envPath = path.join(sourcePath, '.env');
+
+        // Read existing content or start fresh
+        let existingContent = '';
+        const existingVars: Record<string, string> = {};
+
+        if (existsSync(envPath)) {
+          existingContent = readFileSync(envPath, 'utf-8');
+          Object.assign(existingVars, parseSourceEnvFile(existingContent));
+        }
+
+        // Update the token
+        if (config.claudeOAuthToken !== undefined) {
+          existingVars['CLAUDE_CODE_OAUTH_TOKEN'] = config.claudeOAuthToken;
+        }
+
+        // Rebuild the .env file preserving comments and structure
+        const lines = existingContent.split('\n');
+        const processedKeys = new Set<string>();
+        const outputLines: string[] = [];
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) {
+            outputLines.push(line);
+            continue;
+          }
+
+          const eqIndex = trimmed.indexOf('=');
+          if (eqIndex > 0) {
+            const key = trimmed.substring(0, eqIndex).trim();
+            if (key in existingVars) {
+              outputLines.push(`${key}=${existingVars[key]}`);
+              processedKeys.add(key);
+            } else {
+              outputLines.push(line);
+            }
+          } else {
+            outputLines.push(line);
+          }
+        }
+
+        // Add any new keys that weren't in the original file
+        for (const [key, value] of Object.entries(existingVars)) {
+          if (!processedKeys.has(key)) {
+            outputLines.push(`${key}=${value}`);
+          }
+        }
+
+        writeFileSync(envPath, outputLines.join('\n'));
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to update source env'
+        };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.AUTOBUILD_SOURCE_ENV_CHECK_TOKEN,
+    async (): Promise<IPCResult<SourceEnvCheckResult>> => {
+      try {
+        const sourcePath = getEffectiveSourcePath();
+        if (!sourcePath) {
+          return {
+            success: true,
+            data: {
+              hasToken: false,
+              sourcePath: undefined,
+              error: 'Auto-Claude source path not found'
+            }
+          };
+        }
+
+        const envPath = path.join(sourcePath, '.env');
+        if (!existsSync(envPath)) {
+          return {
+            success: true,
+            data: {
+              hasToken: false,
+              sourcePath,
+              error: '.env file does not exist'
+            }
+          };
+        }
+
+        const content = readFileSync(envPath, 'utf-8');
+        const vars = parseSourceEnvFile(content);
+        const hasToken = !!vars['CLAUDE_CODE_OAUTH_TOKEN'] && vars['CLAUDE_CODE_OAUTH_TOKEN'].length > 0;
+
+        return {
+          success: true,
+          data: {
+            hasToken,
+            sourcePath
+          }
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to check source token'
         };
       }
     }

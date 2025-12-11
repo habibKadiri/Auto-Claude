@@ -295,6 +295,65 @@ export function App() {
             onOpenChange={setIsProjectSettingsOpen}
           />
         )}
+
+        {/* Initialize Auto Claude Dialog */}
+        <Dialog open={showInitDialog} onOpenChange={setShowInitDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5" />
+                Initialize Auto Claude
+              </DialogTitle>
+              <DialogDescription>
+                This project doesn't have Auto Claude initialized. Would you like to set it up now?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="rounded-lg bg-muted p-4 text-sm">
+                <p className="font-medium mb-2">This will:</p>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>Create a <code className="text-xs bg-background px-1 py-0.5 rounded">.auto-claude</code> folder in your project</li>
+                  <li>Copy the Auto Claude framework files</li>
+                  <li>Set up the specs directory for your tasks</li>
+                </ul>
+              </div>
+              {!settings.autoBuildPath && (
+                <div className="mt-4 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium text-warning">Source path not configured</p>
+                      <p className="text-muted-foreground mt-1">
+                        Please set the Auto Claude source path in App Settings before initializing.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleSkipInit} disabled={isInitializing}>
+                Skip
+              </Button>
+              <Button
+                onClick={handleInitialize}
+                disabled={isInitializing || !settings.autoBuildPath}
+              >
+                {isInitializing ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Initialize
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
