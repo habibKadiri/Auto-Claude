@@ -248,13 +248,13 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         )}
         onClick={onClick}
       >
-        <CardContent className="p-4 overflow-hidden">
+        <CardContent className="p-4 overflow-hidden min-w-0">
           {/* Header with title and status */}
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-3 min-w-0">
             {/* Title with tooltip for truncation */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <h3 className="font-medium text-sm text-foreground line-clamp-2 flex-1 leading-snug break-words overflow-hidden">
+                <h3 className="font-medium text-sm text-foreground line-clamp-2 flex-1 leading-snug break-words overflow-hidden min-w-0">
                   {task.title}
                 </h3>
               </TooltipTrigger>
@@ -303,7 +303,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           {task.description && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <p className="mt-2 text-xs text-muted-foreground line-clamp-2 leading-relaxed break-words overflow-hidden">
+                <p className="mt-2 text-xs text-muted-foreground line-clamp-2 leading-relaxed break-words overflow-hidden min-w-0">
                   {task.description}
                 </p>
               </TooltipTrigger>
@@ -340,9 +340,9 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
 
           {/* Progress section - enhanced */}
           {(task.chunks.length > 0 || hasActiveExecution) && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] text-muted-foreground font-medium">
+            <div className="mt-4 min-w-0">
+              <div className="flex items-center justify-between mb-1.5 min-w-0 gap-2">
+                <span className="text-[11px] text-muted-foreground font-medium truncate min-w-0 flex-1">
                   {hasActiveExecution && task.executionProgress?.message
                     ? task.executionProgress.message
                     : task.chunks.length > 0
@@ -350,7 +350,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
                       : 'Progress'}
                 </span>
                 <span className={cn(
-                  'text-xs font-semibold tabular-nums',
+                  'text-xs font-semibold tabular-nums shrink-0',
                   isDone ? 'text-success' : 'text-foreground'
                 )}>
                   {hasActiveExecution
@@ -399,8 +399,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           )}
 
           {/* Footer - improved layout */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="mt-4 flex items-center justify-between min-w-0 gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0 shrink-0">
               <Clock className="h-3 w-3" />
               <span>{formatRelativeTime(task.updatedAt)}</span>
             </div>
